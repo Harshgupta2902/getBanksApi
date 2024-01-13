@@ -9,56 +9,59 @@ class BankData extends CI_Controller
         parent::__construct();
         $this->load->database();
         $this->load->helper('url');
+    }
 
+    private function jsonResponse($status, $response, $result = [])
+    {
+        $data = [
+            'status' => $status,
+            'response' => $response,
+            'result' => $result,
+        ];
+        $this->output->set_content_type('application/json')->set_output(json_encode($data));
+    }
+
+    private function loadDatabase()
+    {
+        $this->load->database();
     }
 
     public function getBanks()
     {
-        $query = $this->db->query('SELECT DISTINCT bank FROM banks')->result_array();
-        $data['status'] = "1";
-        $data['response'] = "success";
-        $data['result'] = $query;
-        echo json_encode($data);
+        $this->loadDatabase();
+        $query = $this->db->distinct()->select('bank')->get('banks')->result_array();
+        $this->jsonResponse(1, 'success', $query);
     }
 
     public function getStates()
     {
-        $query = $this->db->query('SELECT DISTINCT state FROM banks')->result_array();
-        $data['status'] = "1";
-        $data['response'] = "success";
-        $data['result'] = $query;
-        echo json_encode($data);
+        $this->loadDatabase();
+        $query = $this->db->distinct()->select('state')->get('banks')->result_array();
+        $this->jsonResponse(1, 'success', $query);
     }
 
     public function getCity()
     {
         $state = $this->input->post('state');
         if (!empty($state)) {
-            $query = $this->db->query("SELECT DISTINCT city1 As city FROM banks WHERE state = '{$state}'")->result_array();
-            $data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->loadDatabase();
+            $query = $this->db->distinct()->select('city1 as city')->get_where('banks', ['state' => $state])->result_array();
+            $this->jsonResponse(1, 'success', $query);
         } else {
-            $data['status'] = "0";
-            $data['response'] = "State is Empty";
+            $this->jsonResponse(0, 'failed', 'State is Empty');
         }
-        echo json_encode($data);
     }
 
     public function getIfsc()
     {
         $bank = $this->input->post('bank');
         if (!empty($bank)) {
-			$query = $this->db->query("SELECT DISTINCT ifsc FROM banks WHERE bank LIKE '%{$bank}%'")->result_array();
-            $data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->loadDatabase();
+            $query = $this->db->distinct()->select('ifsc')->like('bank', $bank)->get('banks')->result_array();
+            $this->jsonResponse(1, 'success', $query);
         } else {
-            $data['status'] = "0";
-            $data['response'] = "bank is Empty";
+            $this->jsonResponse(0, 'failed', 'Bank is Empty');
         }
-
-        echo json_encode($data);
     }
 
     public function getBankfromIfsc()
@@ -66,16 +69,12 @@ class BankData extends CI_Controller
         $ifsc = $this->input->post('ifsc');
 
         if (!empty($ifsc)) {
-            $query = $this->db->query("SELECT * FROM banks WHERE ifsc = '{$ifsc}'")->result_array();
-            $data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->loadDatabase();
+            $query = $this->db->get_where('banks', ['ifsc' => $ifsc])->result_array();
+            $this->jsonResponse(1, 'success', $query ? $query[0] : []);
         } else {
-            $data['status'] = "0";
-            $data['response'] = "ifsc code is Empty";
+            $this->jsonResponse(0, 'failed', 'IFSC code is Empty');
         }
-
-        echo json_encode($data);
     }
 
     public function getBankfromCity()
@@ -83,16 +82,12 @@ class BankData extends CI_Controller
         $city = $this->input->post('city');
 
         if (!empty($city)) {
-            $query = $this->db->query("SELECT * FROM banks WHERE city1 = '{$city}'")->result_array();
-            $data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->loadDatabase();
+            $query = $this->db->get_where('banks', ['city1' => $city])->result_array();
+            $this->jsonResponse(1, 'success', $query);
         } else {
-            $data['status'] = "0";
-            $data['response'] = "city is Empty";
+            $this->jsonResponse(0, 'failed', 'City is Empty');
         }
-
-        echo json_encode($data);
     }
 
     public function getBankfromState()
@@ -100,16 +95,12 @@ class BankData extends CI_Controller
         $state = $this->input->post('state');
 
         if (!empty($state)) {
-            $query = $this->db->query("SELECT * FROM banks WHERE state = '{$state}'")->result_array();
-            $data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->loadDatabase();
+            $query = $this->db->get_where('banks', ['state' => $state])->result_array();
+            $this->jsonResponse(1, 'success', $query);
         } else {
-            $data['status'] = "0";
-            $data['response'] = "city is Empty";
+            $this->jsonResponse(0, 'failed', 'State is Empty');
         }
-
-        echo json_encode($data);
     }
 
     public function search()
@@ -119,28 +110,30 @@ class BankData extends CI_Controller
         $bankName = $this->input->post('bank');
 
         if (empty($state) && empty($city) && empty($bankName)) {
-            $data['status'] = "0";
-            $data['response'] = "city is Empty";
-        } else {
-            $sql = "SELECT * FROM banks WHERE 1";
-            if (!empty($state)) {
-                $sql .= " AND state LIKE '%{$state}%'";
-            }
-            if (!empty($city)) {
-                $sql .= " AND city1 LIKE '%{$city}%'";
-            }
-            if (!empty($bankName)) {
-                $sql .= " AND bank LIKE '%{$bankName}%'";
-            }
-            $query = $this->db->query($sql)->result_array();
-			$data['status'] = "1";
-            $data['response'] = "success";
-            $data['result'] = $query;
+            $this->jsonResponse(0, 'failed', 'All parameters are Empty');
+            return;
         }
 
-        // Build the SQL query based on the provided parameters
+        $this->loadDatabase();
+        $this->db->select('*')->from('banks');
 
-        echo json_encode($data);
+        if (!empty($state)) {
+            $this->db->like('state', $state);
+        }
+        if (!empty($city)) {
+            $this->db->like('city1', $city);
+        }
+        if (!empty($bankName)) {
+            $this->db->like('bank', $bankName);
+        }
+
+        $query = $this->db->get()->result_array();
+
+        $this->jsonResponse(1, 'success', $query);
     }
 
+    public function healthCheck()
+    {
+        $this->jsonResponse(1, 'success', ['status' => 'healthy']);
+    }
 }
